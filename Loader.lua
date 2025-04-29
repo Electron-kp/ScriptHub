@@ -10,35 +10,15 @@ local function checkSupport()
         -- [654321] = true
     }
     
-    -- Add "all games" support by enabling this:
-    -- return true
+    -- Always load the hub regardless of game
+    return true
     
-    -- Check if current game is in the supported list
-    return supportedGames[game.PlaceId] ~= nil
+    -- If you want to restrict to specific games later, use this instead:
+    -- return supportedGames[game.PlaceId] ~= nil
 end
 
 -- Initialize the loader
 local function initLoader()
-    -- Check if the game is supported
-    if not checkSupport() then
-        warn("Script Hub: This game is not supported yet.")
-        
-        -- Optional: Notify the user
-        local success, fluent = pcall(function()
-            return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-        end)
-        
-        if success and fluent then
-            fluent:Notify({
-                Title = "Script Hub",
-                Content = "This game is not supported yet.",
-                Duration = 5
-            })
-        end
-        
-        return
-    end
-    
     -- Create a loading GUI
     local screenGui = Instance.new("ScreenGui")
     screenGui.Name = "ScriptHubLoader"
