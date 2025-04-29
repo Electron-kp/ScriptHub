@@ -1,191 +1,299 @@
--- Minimale Version des ScriptHub
--- Vereinfacht für bessere Kompatibilität und weniger Fehler
+-- Script Hub mit Fluent UI
+-- Einfache Version mit Konfigurationsdatei
 
--- Grundlegende Konfiguration
-local Config = {
-    WindowName = "Script Hub v1.0",
-    Color = Color3.fromRGB(41, 74, 122),
-    Keybind = Enum.KeyCode.F7
-}
-
--- UI-Bibliothek laden (FluentUI) - Zur vorherigen URL zurückkehren
-local success, Library = pcall(function()
-    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-end)
-
-if not success then
-    warn("Fehler beim Laden der UI-Bibliothek: " .. tostring(Library))
-    -- Versuchen Sie, den Benutzer zu benachrichtigen
-    local function showErrorMessage(message)
-        -- Einfache Bildschirmnachricht erstellen
-        local screenGui = Instance.new("ScreenGui")
-        pcall(function() screenGui.Parent = game:GetService("CoreGui") end)
-        if not screenGui.Parent then
-            pcall(function() screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end)
-        end
-        
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(0, 300, 0, 100)
-        frame.Position = UDim2.new(0.5, -150, 0.5, -50)
-        frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-        frame.BorderSizePixel = 0
-        frame.Parent = screenGui
-        
-        local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 6)
-        corner.Parent = frame
-        
-        local textLabel = Instance.new("TextLabel")
-        textLabel.Size = UDim2.new(1, -20, 1, -20)
-        textLabel.Position = UDim2.new(0, 10, 0, 10)
-        textLabel.BackgroundTransparency = 1
-        textLabel.Font = Enum.Font.Gotham
-        textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-        textLabel.TextSize = 14
-        textLabel.TextWrapped = true
-        textLabel.Text = message
-        textLabel.Parent = frame
-        
-        -- Nachricht nach 5 Sekunden ausblenden
-        spawn(function()
-            wait(5)
-            screenGui:Destroy()
-        end)
+-- Einfache Fehlermeldung anzeigen
+local function showErrorMessage(text, duration)
+    duration = duration or 5
+    
+    local screenGui = Instance.new("ScreenGui")
+    pcall(function() screenGui.Parent = game:GetService("CoreGui") end)
+    if not screenGui.Parent then
+        pcall(function() screenGui.Parent = game:GetService("Players").LocalPlayer:WaitForChild("PlayerGui") end)
     end
     
-    showErrorMessage("UI-Bibliothek konnte nicht geladen werden. Bitte versuche es später erneut.")
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(0, 300, 0, 100)
+    frame.Position = UDim2.new(0.5, -150, 0.5, -50)
+    frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    frame.BorderSizePixel = 0
+    frame.Parent = screenGui
+    
+    local corner = Instance.new("UICorner")
+    corner.CornerRadius = UDim.new(0, 6)
+    corner.Parent = frame
+    
+    local textLabel = Instance.new("TextLabel")
+    textLabel.Size = UDim2.new(1, -20, 1, -20)
+    textLabel.Position = UDim2.new(0, 10, 0, 10)
+    textLabel.BackgroundTransparency = 1
+    textLabel.Font = Enum.Font.Gotham
+    textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textLabel.TextSize = 14
+    textLabel.TextWrapped = true
+    textLabel.Text = text
+    textLabel.Parent = frame
+    
+    spawn(function()
+        wait(duration)
+        screenGui:Destroy()
+    end)
+    
+    return screenGui
+end
+
+-- Debug Funktion für Ausgabe
+local function debugPrint(message)
+    print("Script Hub Debug: " .. tostring(message))
+end
+
+-- HTTP Anfrage mit besserer Fehlerbehandlung
+local function safeHttpGet(url)
+    local success, result = pcall(function()
+        return game:HttpGet(url)
+    end)
+    
+    if not success then
+        debugPrint("HTTP Fehler: " .. tostring(result) .. " für URL: " .. url)
+        return nil
+    end
+    
+    return result
+end
+
+-- Lade die Konfigurationsdatei
+local config
+local configSuccess, configError = pcall(function()
+    -- Versuche, die Konfigurationsdatei lokal zu laden
+    config = loadstring(safeHttpGet("https://raw.githubusercontent.com/Electron-kp/Script-Hub/main/config.lua"))()
+end)
+
+if not configSuccess or not config then
+    showErrorMessage("Fehler beim Laden der Konfiguration: " .. tostring(configError), 10)
     return
 end
 
+debugPrint("Konfiguration erfolgreich geladen")
+
+-- Fluent UI Library laden
+local Fluent = nil
+local FluentLoadingMessage = showErrorMessage("Lade Fluent UI...", 30)
+
+local success = pcall(function()
+    Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+end)
+
+if not success or not Fluent then
+    debugPrint("Erster Versuch Fluent zu laden fehlgeschlagen, versuche alternative URL")
+    success = pcall(function()
+        Fluent = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Fluent.lua"))()
+    end)
+    
+    if not success or not Fluent then
+        if FluentLoadingMessage then
+            FluentLoadingMessage:Destroy()
+        end
+        showErrorMessage("Fehler beim Laden der UI-Bibliothek. Bitte versuche es später erneut.", 10)
+        warn("Fluent UI konnte nicht geladen werden.")
+        return
+    end
+end
+
+if FluentLoadingMessage then
+    FluentLoadingMessage:Destroy()
+end
+
 -- Fenster erstellen
-local Window = Library:CreateWindow({
-    Name = Config.WindowName,
-    Themeable = {
-        Info = "Einfache Version des Script Hub"
-    }
+local Window = Fluent:CreateWindow({
+    Title = "Script Hub",
+    SubTitle = "by " .. config.githubUser,
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.RightControl
 })
 
 -- Tabs erstellen
-local Tabs = {
-    Home = Window:AddTab({ Title = "Home", Icon = "home" }),
-    Scripts = Window:AddTab({ Title = "Scripts", Icon = "code" }),
-    Universal = Window:AddTab({ Title = "Universal", Icon = "globe" }),
-    Settings = Window:AddTab({ Title = "Einstellungen", Icon = "settings" })
-}
+local HomeTab = Window:AddTab({ Title = "Home", Icon = "home" })
+local ScriptsTab = Window:AddTab({ Title = "Scripts", Icon = "code" })
+local UniversalTab = Window:AddTab({ Title = "Universal", Icon = "globe" })
+local SettingsTab = Window:AddTab({ Title = "Settings", Icon = "settings" })
 
--- HOME TAB INHALT
-local success, error = pcall(function()
-    Tabs.Home:AddParagraph({
-        Title = "Willkommen im Script Hub",
-        Content = "Dies ist eine vereinfachte Version des Script Hub. Wähle einen Tab, um zu beginnen."
-    })
-    
-    Tabs.Home:AddButton({
-        Title = "Discord beitreten",
-        Description = "Tritt unserem Discord-Server bei",
-        Callback = function()
-            -- Discord-Link zum Kopieren in die Zwischenablage
-            setclipboard("https://discord.gg/yourdiscord")
-            Library:Notify({
-                Title = "Discord",
-                Content = "Discord-Link in Zwischenablage kopiert!",
-                Duration = 3
-            })
-        end
-    })
-end)
+-- HOME TAB
+HomeTab:AddSection("Willkommen")
+HomeTab:AddParagraph({ Title = "Willkommen im Script Hub", Content = "Wähle einen Tab aus, um zu beginnen." })
 
-if not success then
-    warn("Fehler beim Laden des Home-Tabs: " .. tostring(error))
-end
-
--- SCRIPTS TAB INHALT
-local success, error = pcall(function()
-    Tabs.Scripts:AddParagraph({
-        Title = "Spiel-spezifische Scripts",
-        Content = "Scripts für " .. game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
-    })
-    
-    -- Beispiel-Script-Button
-    Tabs.Scripts:AddButton({
-        Title = "Script 1",
-        Description = "Beispiel-Script für dieses Spiel",
-        Callback = function()
-            Library:Notify({
-                Title = "Script",
-                Content = "Script 1 wird ausgeführt...",
-                Duration = 3
-            })
-            -- Hier würde der eigentliche Script-Code ausgeführt werden
-        end
-    })
-end)
-
-if not success then
-    warn("Fehler beim Laden des Scripts-Tabs: " .. tostring(error))
-end
-
--- UNIVERSAL TAB INHALT
-local success, error = pcall(function()
-    Tabs.Universal:AddParagraph({
-        Title = "Universal Scripts",
-        Content = "Scripts, die in jedem Spiel funktionieren"
-    })
-    
-    -- Einfacher ESP-Button als Beispiel
-    Tabs.Universal:AddButton({
-        Title = "Einfacher ESP",
-        Description = "Markiert andere Spieler",
-        Callback = function()
-            Library:Notify({
-                Title = "Universal",
-                Content = "ESP wird geladen...",
-                Duration = 3
-            })
-            -- Hier würde der ESP-Code stehen
-        end
-    })
-end)
-
-if not success then
-    warn("Fehler beim Laden des Universal-Tabs: " .. tostring(error))
-end
-
--- SETTINGS TAB INHALT
-local success, error = pcall(function()
-    Tabs.Settings:AddParagraph({
-        Title = "Einstellungen",
-        Content = "Grundlegende Einstellungen für Script Hub"
-    })
-    
-    Tabs.Settings:AddButton({
-        Title = "UI schließen",
-        Description = "Schließt das Script Hub",
-        Callback = function()
-            Library:Destroy()
-        end
-    })
-    
-    -- Tastenkombination zum Öffnen/Schließen
-    Tabs.Settings:AddKeybind({
-        Title = "Öffnen/Schließen",
-        Description = "Tastenkombination zum Öffnen/Schließen des Script Hub",
-        Default = Config.Keybind,
-        Callback = function()
-            Library:ToggleUI()
-        end
-    })
-end)
-
-if not success then
-    warn("Fehler beim Laden des Settings-Tabs: " .. tostring(error))
-end
-
--- Benachrichtigung anzeigen, dass alles geladen wurde
-Library:Notify({
-    Title = "Script Hub",
-    Content = "Script Hub wurde erfolgreich geladen!",
-    Duration = 3
+HomeTab:AddButton({
+    Title = "Discord beitreten",
+    Description = "Tritt unserem Discord-Server bei",
+    Callback = function()
+        setclipboard("https://discord.gg/yourdiscord")
+        Fluent:Notify({
+            Title = "Script Hub", 
+            Content = "Discord-Link kopiert!",
+            Duration = 3
+        })
+    end
 })
 
--- Ende des Scripts 
+-- SCRIPTS TAB - Jetzt nutzen wir die config.lua für Spielscripts
+ScriptsTab:AddSection("Spiel-spezifische Scripts")
+
+-- Spielname und ID ermitteln
+local gameId = game.PlaceId
+local gameName = "Unbekannt"
+
+pcall(function()
+    gameName = game:GetService("MarketplaceService"):GetProductInfo(gameId).Name
+end)
+
+ScriptsTab:AddParagraph({ Title = "Aktives Spiel", Content = gameName .. " (ID: " .. gameId .. ")" })
+
+-- Prüfen, ob Scripts für dieses Spiel in der Konfiguration existieren
+local gameScriptConfig = config.gameScripts[gameId]
+
+if gameScriptConfig and gameScriptConfig.scripts and #gameScriptConfig.scripts > 0 then
+    -- Für jedes Script einen Button hinzufügen
+    for i, scriptData in ipairs(gameScriptConfig.scripts) do
+        ScriptsTab:AddButton({
+            Title = scriptData.name,
+            Description = scriptData.description or "Script für " .. scriptData.name,
+            Callback = function()
+                local success, result = pcall(function()
+                    return loadstring(scriptData.loadstring)()
+                end)
+                
+                if success then
+                    Fluent:Notify({
+                        Title = "Script Hub", 
+                        Content = scriptData.name .. " wurde geladen!",
+                        Duration = 3
+                    })
+                else
+                    Fluent:Notify({
+                        Title = "Script Hub", 
+                        Content = "Fehler beim Ausführen des Scripts: " .. tostring(result),
+                        Duration = 5
+                    })
+                end
+            end
+        })
+    end
+else
+    ScriptsTab:AddParagraph({ Title = "Nicht unterstützt", Content = "Dieses Spiel wird derzeit nicht unterstützt." })
+end
+
+-- UNIVERSAL TAB - Aus der config.lua laden
+UniversalTab:AddSection("Universal Scripts")
+
+if #config.universalScripts > 0 then
+    for _, script in ipairs(config.universalScripts) do
+        UniversalTab:AddButton({
+            Title = script.name,
+            Description = script.description,
+            Callback = function()
+                local success, result = pcall(loadstring(script.loadstring))
+                
+                if success then
+                    Fluent:Notify({
+                        Title = "Script Hub", 
+                        Content = script.name .. " wurde geladen!",
+                        Duration = 3
+                    })
+                else
+                    Fluent:Notify({
+                        Title = "Script Hub", 
+                        Content = "Fehler beim Ausführen des Scripts: " .. tostring(result),
+                        Duration = 5
+                    })
+                end
+            end
+        })
+    end
+else
+    UniversalTab:AddParagraph({ Title = "Keine Scripts gefunden", Content = "Es wurden keine Universal Scripts gefunden." })
+end
+
+-- SETTINGS TAB
+SettingsTab:AddSection("Benutzeroberfläche")
+
+-- Theme Toggle
+local themeToggle = SettingsTab:AddToggle({
+    Title = "Dunkles Theme",
+    Default = true,
+    Callback = function(Value)
+        Fluent:ToggleTheme(Value and "Dark" or "Light")
+    end
+})
+
+-- UI Key Bind
+SettingsTab:AddKeybind({
+    Title = "UI-Taste",
+    Default = Enum.KeyCode.RightControl,
+    KeySelected = function(Key)
+        Window.MinimizeKey = Key
+    end,
+    ChangedCallback = function(Key)
+        Window.MinimizeKey = Key
+    end
+})
+
+-- Close UI Button
+SettingsTab:AddButton({
+    Title = "UI schließen",
+    Description = "Schließt das Script Hub",
+    Callback = function()
+        if Fluent and Fluent.Destroy then
+            Fluent:Destroy()
+        else
+            for _, v in pairs(game:GetService("CoreGui"):GetChildren()) do
+                if v.Name:find("Fluent") then
+                    v:Destroy()
+                end
+            end
+        end
+    end
+})
+
+-- Neu laden Button
+SettingsTab:AddButton({
+    Title = "Script Hub neu laden",
+    Description = "Lädt das Script Hub neu",
+    Callback = function()
+        Fluent:Destroy()
+        loadstring(game:HttpGet("https://raw.githubusercontent.com/Electron-kp/Script-Hub/main/Loader.lua"))()
+    end
+})
+
+-- Status Section
+SettingsTab:AddSection("Status")
+
+-- Calculate total game scripts
+local totalGameScripts = 0
+for _, gameData in pairs(config.gameScripts) do
+    if gameData.scripts then
+        totalGameScripts = totalGameScripts + #gameData.scripts
+    end
+end
+
+-- Add Debug Info
+SettingsTab:AddParagraph({ 
+    Title = "Debug Info", 
+    Content = "GitHub User: " .. config.githubUser .. 
+              "\nGitHub Repo: " .. config.githubRepo .. 
+              "\nBranch: " .. config.githubBranch ..
+              "\nUnterstützte Spiele: " .. (function() 
+                  local count = 0
+                  for _ in pairs(config.gameScripts) do count = count + 1 end
+                  return count
+              end)() ..
+              "\nSpiel-Scripts gesamt: " .. totalGameScripts ..
+              "\nUniversal Scripts: " .. #config.universalScripts
+})
+
+-- Benachrichtigung anzeigen
+Fluent:Notify({
+    Title = "Script Hub", 
+    Content = "Script Hub wurde erfolgreich geladen!",
+    Duration = 3
+}) 
