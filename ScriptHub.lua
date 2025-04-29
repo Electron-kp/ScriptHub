@@ -8,9 +8,9 @@ local Config = {
     Keybind = Enum.KeyCode.F7
 }
 
--- UI-Bibliothek laden (FluentUI)
+-- UI-Bibliothek laden (FluentUI) - Zur vorherigen URL zurückkehren
 local success, Library = pcall(function()
-    return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/main.lua"))()
+    return loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 end)
 
 if not success then
