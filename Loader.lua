@@ -107,7 +107,7 @@ local function initLoader()
         local success, error = pcall(function()
             -- Load the script hub
             -- Replace this URL with the actual URL to your script hub
-            loadstring(game:HttpGet("https://raw.githubusercontent.com/YourUsername/ScriptHub/main/ScriptHub.lua"))()
+            loadstring(game:HttpGet("https://raw.githubusercontent.com/Electron-kp/ScriptHub/main/ScriptHub.lua"))()
         end)
         
         if success then
