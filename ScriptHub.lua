@@ -5,7 +5,8 @@ local config = {
     theme = "Dark",
     keybind = Enum.KeyCode.RightControl,
     saveConfig = true,
-    autoLoad = true
+    autoLoad = true,
+    githubRepo = "Electron-kp/ScriptHub" -- Change this to your actual GitHub username/repo
 }
 
 -- Script Hub Core
@@ -13,6 +14,11 @@ local ScriptHub = {}
 ScriptHub.Loaded = false
 ScriptHub.Games = {}
 ScriptHub.ActiveScripts = {}
+
+-- Utility Functions
+local function loadFromGithub(path)
+    return game:HttpGet("https://raw.githubusercontent.com/" .. config.githubRepo .. "/main/" .. path)
+end
 
 -- Load Fluent UI Library
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
@@ -310,9 +316,8 @@ function ScriptHub:LoadGameScripts()
     
     -- Check if we have a script for this game
     local success, gameModule = pcall(function()
-        -- In a real implementation, you would use a better method to check if the file exists
-        -- This is just a placeholder for demonstration
-        return loadstring(readfile("games/" .. placeId .. ".lua"))()
+        -- Try to load game script from GitHub
+        return loadstring(loadFromGithub("games/" .. placeId .. ".lua"))()
     end)
     
     if success and gameModule then
@@ -373,7 +378,9 @@ function ScriptHub:LoadGameScripts()
                     Content = "Checking for updates...",
                     Duration = 3
                 })
-                -- Would implement update checking logic here
+                
+                -- Try to load the game script again
+                ScriptHub:LoadGameScripts()
             end
         })
     end
