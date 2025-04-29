@@ -6,7 +6,7 @@ local config = {
     keybind = Enum.KeyCode.RightControl,
     saveConfig = true,
     autoLoad = true,
-    githubRepo = "Electron-kp/ScriptHub" -- Change this to your actual GitHub username/repo
+    githubRepo = "Electron-kp/ScriptHub"
 }
 
 -- Script Hub Core
@@ -15,15 +15,47 @@ ScriptHub.Loaded = false
 ScriptHub.Games = {}
 ScriptHub.ActiveScripts = {}
 
+-- Error handling
+local function safeCall(func, ...)
+    local success, result = pcall(func, ...)
+    if not success then
+        warn("Script Hub Error: " .. tostring(result))
+        return nil
+    end
+    return result
+end
+
 -- Utility Functions
 local function loadFromGithub(path)
-    return game:HttpGet("https://raw.githubusercontent.com/" .. config.githubRepo .. "/main/" .. path)
+    return safeCall(function()
+        return game:HttpGet("https://raw.githubusercontent.com/" .. config.githubRepo .. "/main/" .. path)
+    end) or ""
 end
 
 -- Load Fluent UI Library
 local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
-local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
-local ThemeManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/ThemeManager.lua"))()
+
+-- Make sure Fluent was loaded
+if not Fluent then
+    warn("Failed to load Fluent UI library")
+    return
+end
+
+local SaveManager
+local ThemeManager
+
+-- Safely load addons
+local function loadAddons()
+    SaveManager = safeCall(function() 
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+    end)
+    
+    ThemeManager = safeCall(function() 
+        return loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/ThemeManager.lua"))()
+    end)
+end
+
+loadAddons()
 
 -- Create main window
 local Window = Fluent:CreateWindow({
@@ -49,8 +81,16 @@ Tabs.Home:AddSection("Welcome")
 Tabs.Home:AddParagraph("Welcome to Script Hub", "Navigate to the Scripts tab to find scripts for this game or check the Universal tab for scripts that work in any game.")
 
 Tabs.Home:AddSection("Game Information")
-local gameNameLabel = Tabs.Home:AddParagraph("Game", game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name)
-local gameIdLabel = Tabs.Home:AddParagraph("Game ID", tostring(game.PlaceId))
+-- Safely get game info
+local gameName = "Unknown"
+local gameId = tostring(game.PlaceId)
+
+safeCall(function()
+    gameName = game:GetService("MarketplaceService"):GetProductInfo(game.PlaceId).Name
+end)
+
+local gameNameLabel = Tabs.Home:AddParagraph("Game", gameName)
+local gameIdLabel = Tabs.Home:AddParagraph("Game ID", gameId)
 
 -- Universal Scripts tab
 Tabs.Universal:AddSection("Universal Scripts")
@@ -297,12 +337,14 @@ Tabs.Settings:AddColorpicker("AccentColor", {
     end
 })
 
--- Add SaveManager and ThemeManager to window
-SaveManager:SetLibrary(Fluent)
-ThemeManager:SetLibrary(Fluent)
-
-SaveManager:BuildConfigSection(Tabs.Settings)
-ThemeManager:ApplyToTab(Tabs.Settings)
+-- Add SaveManager and ThemeManager to window if they loaded correctly
+if SaveManager and ThemeManager then
+    SaveManager:SetLibrary(Fluent)
+    ThemeManager:SetLibrary(Fluent)
+    
+    SaveManager:BuildConfigSection(Tabs.Settings)
+    ThemeManager:ApplyToTab(Tabs.Settings)
+end
 
 -- Function to find and load game scripts
 function ScriptHub:LoadGameScripts()
@@ -315,60 +357,82 @@ function ScriptHub:LoadGameScripts()
     Tabs.Scripts:AddSection("Game-Specific Scripts")
     
     -- Check if we have a script for this game
-    local success, gameModule = pcall(function()
-        -- Try to load game script from GitHub
-        return loadstring(loadFromGithub("games/" .. placeId .. ".lua"))()
-    end)
+    local gameScriptContent = loadFromGithub("games/" .. placeId .. ".lua")
+    local gameModule, loadError
     
-    if success and gameModule then
+    if gameScriptContent and #gameScriptContent > 0 then
+        gameModule, loadError = loadstring(gameScriptContent)
+        
+        if gameModule then
+            -- Safely execute the module
+            local success, moduleData = pcall(gameModule)
+            if success and moduleData then
+                gameModule = moduleData
+                gameScriptsFound = true
+            else
+                warn("Error loading game module: " .. tostring(moduleData))
+                gameModule = nil
+            end
+        else
+            warn("Error parsing game script: " .. tostring(loadError))
+        end
+    end
+    
+    if gameModule and gameScriptsFound then
         -- Add game info
         Tabs.Scripts:AddSection("Game Information")
-        Tabs.Scripts:AddParagraph("Game", gameModule.name)
-        Tabs.Scripts:AddParagraph("Created by", gameModule.author)
-        Tabs.Scripts:AddParagraph("Description", gameModule.description)
+        Tabs.Scripts:AddParagraph("Game", gameModule.name or "Unknown Game")
+        Tabs.Scripts:AddParagraph("Created by", gameModule.author or "Unknown")
+        Tabs.Scripts:AddParagraph("Description", gameModule.description or "No description available")
         
         -- Add scripts section
         Tabs.Scripts:AddSection("Available Scripts")
         
         -- Add each script as a button
-        for i, script in ipairs(gameModule.scripts) do
-            Tabs.Scripts:AddButton({
-                Title = script.name,
-                Description = script.description,
-                Callback = function()
-                    -- Check if script is already running
-                    if ScriptHub.ActiveScripts[script.name] then
-                        -- Stop the script
-                        if type(ScriptHub.ActiveScripts[script.name]) == "function" then
-                            ScriptHub.ActiveScripts[script.name]() -- Call cleanup function
+        if gameModule.scripts and type(gameModule.scripts) == "table" then
+            for i, script in ipairs(gameModule.scripts) do
+                Tabs.Scripts:AddButton({
+                    Title = script.name or "Unknown Script",
+                    Description = script.description or "",
+                    Callback = function()
+                        -- Check if script is already running
+                        if ScriptHub.ActiveScripts[script.name] then
+                            -- Stop the script
+                            if type(ScriptHub.ActiveScripts[script.name]) == "function" then
+                                ScriptHub.ActiveScripts[script.name]() -- Call cleanup function
+                            end
+                            ScriptHub.ActiveScripts[script.name] = nil
+                            
+                            Fluent:Notify({
+                                Title = "Script Hub",
+                                Content = script.name .. " has been stopped",
+                                Duration = 3
+                            })
+                        else
+                            -- Run the script
+                            local cleanup
+                            if type(script.callback) == "function" then
+                                cleanup = script.callback()
+                            else
+                                warn("Script callback is not a function: " .. tostring(script.name))
+                            end
+                            
+                            ScriptHub.ActiveScripts[script.name] = cleanup
+                            
+                            Fluent:Notify({
+                                Title = "Script Hub",
+                                Content = script.name .. " has been activated",
+                                Duration = 3
+                            })
                         end
-                        ScriptHub.ActiveScripts[script.name] = nil
-                        
-                        Fluent:Notify({
-                            Title = "Script Hub",
-                            Content = script.name .. " has been stopped",
-                            Duration = 3
-                        })
-                    else
-                        -- Run the script
-                        local cleanup = script.callback()
-                        ScriptHub.ActiveScripts[script.name] = cleanup
-                        
-                        Fluent:Notify({
-                            Title = "Script Hub",
-                            Content = script.name .. " has been activated",
-                            Duration = 3
-                        })
                     end
-                end
-            })
+                })
+            end
+        else
+            Tabs.Scripts:AddParagraph("Script Error", "The game script format is invalid.")
         end
-        
-        gameScriptsFound = true
-    end
-    
-    -- If no scripts were found, show a message
-    if not gameScriptsFound then
+    else
+        -- If no scripts were found, show a message
         Tabs.Scripts:AddParagraph("No Scripts Found", "No scripts available for this game yet.")
         Tabs.Scripts:AddButton({
             Title = "Check for Updates",
@@ -390,7 +454,7 @@ end
 function ScriptHub:CleanupActiveScripts()
     for scriptName, cleanup in pairs(ScriptHub.ActiveScripts) do
         if type(cleanup) == "function" then
-            cleanup()
+            safeCall(cleanup)
         end
     end
     ScriptHub.ActiveScripts = {}
@@ -403,14 +467,18 @@ function ScriptHub:Init()
     
     -- Load game scripts if auto load is enabled
     if config.autoLoad then
-        ScriptHub:LoadGameScripts()
+        safeCall(function()
+            ScriptHub:LoadGameScripts()
+        end)
     end
     
     -- Add handler for game switching (in case player teleports to a different game)
-    game:GetService("Players").PlayerRemoving:Connect(function(player)
-        if player == game:GetService("Players").LocalPlayer then
-            ScriptHub:CleanupActiveScripts()
-        end
+    safeCall(function()
+        game:GetService("Players").PlayerRemoving:Connect(function(player)
+            if player == game:GetService("Players").LocalPlayer then
+                ScriptHub:CleanupActiveScripts()
+            end
+        end)
     end)
     
     -- Notify the user that the UI is loaded
@@ -422,7 +490,9 @@ function ScriptHub:Init()
 end
 
 -- Start the Script Hub
-ScriptHub:Init()
+safeCall(function()
+    ScriptHub:Init()
+end)
 
 -- Return the Script Hub object (useful for accessing from other scripts)
 return ScriptHub 
